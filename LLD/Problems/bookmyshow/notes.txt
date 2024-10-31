@@ -1,0 +1,64 @@
+1.Gather all requirement
+    Requirements:
+    a.App will be listing current movies and the shows.
+    b.App allows user to search for movies.
+    c.App will be listing different shows for a movie.
+    d.App allows registered user to book ticket for a show.
+    e.App allows theaters to add and edit a show.
+
+    Assumptions
+    a.Every theater has single screen.
+    b.Every theater has some capacity(No. of seats).
+    c.Registered users can book tickets, but Guest users are allowed to search movies.
+    d.Registered users will have the history of their bookings.
+    e.Movies can be in two languages: Hindi and English
+    f.Movies can have any of the four genres: Action, Romance, Comedy and Horror.
+    g.We are not considering Payment
+
+2.Create Use-Case Diagram
+    Steps for drawing diagrams
+    a.Identification of Actors
+      >User and Theater
+    b.Identification of Use-Cases
+      Action taken by the actors becomes the use case
+      >Search Movie
+      >Book Movie
+      >Add Movie
+      >Update Movie
+      >Register
+      >Login
+    c.Adding Associations
+      >Association is relationship between actors and use case: Fig 1
+    d.Identification of Inclusive Use-cases
+      >Breaking use-case into sub use-case: Fig 2
+      ex: Book Movie could be broken into Select Show | Make Payment
+    e.Identification of Extension Use-cases
+      >
+    f.Identification of Inheritance: Fig 3
+      >Identifying generalization in actors
+      >User could be of two type: Registered and Guest
+      >Will result in updated association: Fig 4
+3.Create Class Diagram
+    >Tag all the noun in the requirement
+
+    ex:
+      a.App will be listing current movies and the shows.       | App, Movie, Show
+      b.App allows user to search for movies.                   | App, User, Movie
+      c.App will be listing different shows for a movie.        | App, Shows, Movie
+      d.App allows registered user to book ticket for a show.   | App, Registered User. Ticket, Show
+      e.App allows theaters to add and edit a show.             | App, Theater, Show
+
+      App | Movie | User | Show | Registered User | Ticket | Theater
+      Add More nouns from the assumption too
+      Screen | Guest User | Language | Genres
+
+    >Create Different Classes for the nouns and rearrange them: Fig 5
+    >Draw the association between class: Fig 6
+    >Perform Refinement: Fig 7
+    # Since theater contains single screen, theater could represent screen
+    # For Genre/Language instead of class we could use enumeration
+    # User could be made abstract: Abstract Class uses Italics in className
+    >Final class Diagram: Fig 8
+4.Create Skeleton Code
+    >Create all the class with attribute as defined in class diagram
+5.Complete Code Implementation
