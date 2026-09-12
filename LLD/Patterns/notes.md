@@ -740,13 +740,13 @@ public class Particle {
 
 ## Creational Patterns
 
-### 20. Factory & Abstract Factory Pattern
+### 20. FactoryMain & Abstract FactoryMain Pattern
 * **What problems it solves**: Direct instantiation of concrete classes via `new`, which creates rigid dependencies and violates the Open/Closed Principle.
 * **When it should be used**:
-  * **Factory Method**: When a class delegates object creation to subclasses via inheritance.
-  * **Abstract Factory**: When a client needs to create families of related/dependent products without specifying their concrete classes.
+  * **FactoryMain Method**: When a class delegates object creation to subclasses via inheritance.
+  * **Abstract FactoryMain**: When a client needs to create families of related/dependent products without specifying their concrete classes.
 * **Resembles with**: Builder, Prototype.
-* **How to decide usage vs resembling pattern**: Use Factory Method for single products. Use Abstract Factory for families of products. Use Builder to construct complex multi-part objects step-by-step.
+* **How to decide usage vs resembling pattern**: Use FactoryMain Method for single products. Use Abstract FactoryMain for families of products. Use Builder to construct complex multi-part objects step-by-step.
 * **Before Code (Problem)**:
 ```java
 public Pizza orderPizza(String type) {
@@ -757,14 +757,14 @@ public Pizza orderPizza(String type) {
     return p;
 }
 ```
-* **After Code (Factory Method & Abstract Factory Pattern)**:
+* **After Code (FactoryMain Method & Abstract FactoryMain Pattern)**:
 ```java
-// Abstract Factory Interface for ingredients
+// Abstract FactoryMain Interface for ingredients
 public interface PizzaIngredientFactory {
     Dough createDough();
 }
 
-// Factory Method in Creator Class
+// FactoryMain Method in Creator Class
 public abstract class PizzaStore {
     public Pizza orderPizza(String type) {
         Pizza pizza = createPizza(type);
@@ -787,8 +787,8 @@ public class NYPizzaStore extends PizzaStore {
 ### 21. Builder Design Pattern
 * **What problems it solves**: Massive telescoping constructors, unclear parameter ordering, and objects left in partially initialized states.
 * **When it should be used**: When constructing a complex object requires many configuration steps or involves multiple optional fields.
-* **Resembles with**: Abstract Factory.
-* **How to decide usage vs resembling pattern**: Abstract Factory creates simple or family objects in a single pass. Builder constructs a complex object step-by-step and returns the product when invoked.
+* **Resembles with**: Abstract FactoryMain.
+* **How to decide usage vs resembling pattern**: Abstract FactoryMain creates simple or family objects in a single pass. Builder constructs a complex object step-by-step and returns the product when invoked.
 * **Before Code (Problem)**:
 ```java
 User u = new User("John", "Doe", null, 25, null, true, "1234567890"); // Telescoping constructor anti-pattern
@@ -826,7 +826,7 @@ public class User {
 ### 22. Object Pool Design Pattern
 * **What problems it solves**: Performance bottlenecks and garbage collection overhead caused by repeatedly allocating and deallocating expensive system resources.
 * **When it should be used**: When instances are computationally expensive to create (e.g., database connections, network sockets), and the application requires a pool of reusable instances.
-* **Resembles with**: Singleton, Factory Method.
+* **Resembles with**: Singleton, FactoryMain Method.
 * **How to decide usage vs resembling pattern**: Singleton restricts instantiation to one instance. Object Pool provides a collection of reusable instances checked out and returned by clients.
 * **Before Code (Problem)**:
 ```java
@@ -908,13 +908,13 @@ public class BeatView implements Observer {
 To design each system, apply the principles and patterns detailed above:
 
 1. **Design Parking Lot**:
-   * *Patterns applied*: Factory (for vehicle/ticket creation), Strategy (hourly vs daily fee calculation), Observer (updating electronic display boards on spot occupancy).
+   * *Patterns applied*: FactoryMain (for vehicle/ticket creation), Strategy (hourly vs daily fee calculation), Observer (updating electronic display boards on spot occupancy).
 2. **Design Tic-Tac-Toe Game**:
    * *Patterns applied*: State (current player turn, game over states), Strategy (pluggable AI player vs human player).
 3. **LLD of Elevator System**:
    * *Patterns applied*: State (MovingUp, MovingDown, Idle), Strategy (elevator dispatch algorithms like SCAN, LOOK).
 4. **LLD of Car Rental System**:
-   * *Patterns applied*: Factory (car types), Decorator (add-ons like GPS, child seats, roadside insurance), State (reserved, rented, returned, maintenance).
+   * *Patterns applied*: FactoryMain (car types), Decorator (add-ons like GPS, child seats, roadside insurance), State (reserved, rented, returned, maintenance).
 5. **LLD of Snake n Ladder Game**:
    * *Patterns applied*: Template Method (game turn execution workflow), Composite/State (board squares containing snakes, ladders, or normal positions).
 6. **LLD of BookMyShow | Design Movie Ticket Booking App**:
@@ -930,4 +930,4 @@ To design each system, apply the principles and patterns detailed above:
 11. **LLD of Apply Coupons on Shopping Cart Products**:
     * *Patterns applied*: Decorator (chaining multiple discount coupons or percentage discounts on a product), Strategy (coupon validation logic).
 12. **LLD of Payment Gateway**:
-    * *Patterns applied*: Adapter (unifying different banking and card network APIs like Visa, Mastercard, UPI), Strategy (retry and routing mechanisms), Factory (instantiating payment providers).
+    * *Patterns applied*: Adapter (unifying different banking and card network APIs like Visa, Mastercard, UPI), Strategy (retry and routing mechanisms), FactoryMain (instantiating payment providers).

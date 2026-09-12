@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="JAVA_MODULE" version="4">
+  <component name="NewModuleRootManager" inherit-compiler-output="true">
+    <exclude-output />
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/Creational/AbstractFactory" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/Creational/Builder" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/Creational/Factory" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/Creational/Factory/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/Creational/Prototype" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/Creational/Singleton" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/Structural/Adapter" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/Structural/Bridge" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/Structural/Composite" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/Structural/Decorator" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/Structural/Facade" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/Structural/Flyweight" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/Structural/Proxy" isTestSource="false" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>

@@ -33,7 +33,7 @@
 * Flyweight Design Pattern
 
 ### Creational Patterns
-* Factory & Abstract Factory pattern
+* FactoryMain & Abstract FactoryMain pattern
 * Builder Design Pattern
 * Object Pool Design Pattern
 
