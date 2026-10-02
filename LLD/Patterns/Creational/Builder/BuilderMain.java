@@ -1,5 +1,8 @@
+package Creational.Builder;
+
 public class BuilderMain {
     public static void main(String[] args) {
-        System.out.println("BuilderMain");
+        User user = new User.Builder().name("Rishi").build();
+        System.out.println(user);
     }
 }
