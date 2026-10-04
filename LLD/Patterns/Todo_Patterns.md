@@ -27,10 +27,10 @@ Track your progress as you learn and implement each design pattern by checking o
 
 ## Structural
 
-- [ ] Adapter
-- [ ] Bridge
-- [ ] Composite
-- [ ] Decorator
-- [ ] Facade
+- [x] Adapter
+- [x] Bridge
+- [x] Composite
+- [x] Decorator
+- [x] Facade
 - [ ] Flyweight
-- [ ] Proxy
+- [x] Proxy
