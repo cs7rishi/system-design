@@ -1,0 +1,1610 @@
+Interview Questions - SDE 3
+Focus Areas: Advanced algorithms, concurrency patterns, production-readiness, system-level thinking
+
+Table of Contents
+Overview
+
+Round 1: DSA-Focused Questions
+
+Round 2: Framework/API-Focused Questions
+
+Round 3: Low-Level Design Questions
+
+Evaluation Criteria for SDE 3
+
+Follow-up Questions for SDE 3
+
+Scoring Rubric
+
+Overview
+SDE 3 interviews focus on demonstrating expertise in building production-ready, scalable systems. Candidates at this level are expected to show:
+
+Advanced algorithmic knowledge: Complex data structures, concurrency patterns, distributed algorithms
+
+Production mindset: Error handling, monitoring, graceful degradation, fault tolerance
+
+Component-level design: Can design complex components and services, not entire distributed systems
+
+Framework mastery: Deep knowledge of enterprise frameworks and libraries
+
+Operational excellence: Observability, debugging, deployment strategies
+
+Mentorship: Able to mentor junior engineers and contribute to team standards
+
+These questions are designed to assess the candidate's ability to design and implement production-ready components that can handle real-world challenges including failures, scale, and operational concerns.
+
+ROUND 1: DSA-Focused Questions
+Q1.1: Distributed Lock Manager with Fairness
+Category: Concurrency + Priority Queue
+
+Real-World Context (Hevo Platform):
+Hevo has multiple worker nodes processing pipelines across thousands of customers. When a pipeline needs exclusive access to a resource (like updating a checkpoint in PostgreSQL or syncing to a Snowflake destination), distributed locks prevent race conditions and ensure only one worker processes that pipeline at a time. Fairness guarantees prevent pipeline starvation when hundreds of pipelines compete for limited destination connections.
+
+Problem Statement:
+Design a lock manager for distributed systems where:
+
+Locks can have timeouts (auto-release after T seconds)
+
+When multiple threads wait for a lock, prioritize the longest waiting thread (fairness)
+
+Support try-lock with timeout
+
+Requirements:
+Implement LockManager class:
+
+boolean lock(String resourceId, String ownerId, int timeoutSeconds) - Acquire lock
+
+boolean tryLock(String resourceId, String ownerId, int waitTimeMs, int lockTimeoutSeconds) - Try acquiring with wait limit
+
+void unlock(String resourceId, String ownerId) - Release lock
+
+Background thread to auto-release expired locks
+
+Example:
+
+
+
+Thread1: lock("db_connection", "thread1", 30) → true
+Thread2: lock("db_connection", "thread2", 30) → blocks until Thread1 releases or times out
+Thread3: tryLock("db_connection", "thread3", 5000, 30) → false if can't acquire in 5s
+What to Look For:
+
+ConcurrentHashMap for lock state storage
+
+Min-heap for timeout tracking (scheduled cleanup)
+
+Priority queue for fairness (FIFO order)
+
+ReentrantLock or synchronized for coordination
+
+Scheduled executor for background cleanup
+
+Preventing starvation
+
+Deadlock prevention (timeout mechanism)
+
+Proper exception handling
+
+Q1.2: Event Stream Processor with Transaction Boundaries
+Category: State Machine + Buffering
+
+Real-World Context (Hevo Platform):
+Database CDC events come in transaction boundaries (BEGIN/COMMIT/ROLLBACK). Hevo must buffer events within a transaction and only process committed transactions to maintain transactional consistency in destination warehouses. If a source database rolls back a transaction, Hevo must discard those events to avoid data corruption. This is critical for financial and e-commerce customers where transactional integrity is non-negotiable.
+
+Problem Statement:
+You're processing a stream of database change events (INSERT, UPDATE, DELETE). Events are grouped into transactions, marked by BEGIN, COMMIT, or ROLLBACK events. You need to:
+
+Buffer events until transaction completes
+
+Only output committed transactions
+
+Handle out-of-order events within a transaction
+
+Requirements:
+Design a system that:
+
+Accepts events: {type: "INSERT/UPDATE/DELETE/BEGIN/COMMIT/ROLLBACK", txnId: 123, data: ...}
+
+Buffers events per transaction
+
+Outputs complete transactions only after COMMIT
+
+Discards transactions on ROLLBACK
+
+Handles interleaved transactions
+
+Example:
+
+
+
+Input Stream:
+  {type: "BEGIN", txnId: 1}
+  {type: "INSERT", txnId: 1, data: "row1"}
+  {type: "BEGIN", txnId: 2}
+  {type: "UPDATE", txnId: 1, data: "row2"}
+  {type: "COMMIT", txnId: 1}
+  {type: "DELETE", txnId: 2, data: "row3"}
+  {type: "ROLLBACK", txnId: 2}
+Output: [
+  Transaction 1: [INSERT row1, UPDATE row2]
+]
+// Transaction 2 discarded due to ROLLBACK
+What to Look For:
+
+HashMap<TxnId, TransactionBuffer>
+
+State machine for transaction states (OPEN, COMMITTED, ROLLED_BACK)
+
+Event buffering strategy
+
+Memory management (limit buffer size, purge old transactions)
+
+Handling malformed streams (COMMIT without BEGIN)
+
+Timeout for incomplete transactions
+
+Concurrency considerations
+
+Q1.3: Job Scheduler with Resource Constraints
+Category: Constraint Satisfaction + Scheduling
+
+Real-World Context (Hevo Platform):
+Hevo processes millions of records daily across 150+ sources and destinations. Each destination (Redshift, BigQuery, Snowflake) has connection limits that must be respected to avoid overwhelming customer databases. The scheduler must distribute load across destinations while maximizing throughput—if all pipelines for Snowflake run simultaneously, connection limits are breached causing cascading failures. Resource-aware scheduling prevents hot-spotting and ensures fair resource allocation across multi-tenant workloads.
+
+Problem Statement:
+You have N jobs to process across M workers. Each job targets a specific destination (database/API), and each destination has a connection limit K. Schedule jobs to:
+
+Maximize parallel execution
+
+Respect per-destination connection limits
+
+Avoid hot-spotting (don't send all jobs for same destination at once)
+
+Requirements:
+Given:
+
+jobs[] - array of jobs, each with destinationId
+
+destinations[] - array with maxConcurrentConnections per destination
+
+numWorkers - number of parallel workers
+
+Schedule jobs optimally.
+
+Example:
+
+
+
+jobs = [
+  {id: 1, dest: "A"},
+  {id: 2, dest: "A"},
+  {id: 3, dest: "B"},
+  {id: 4, dest: "A"},
+  {id: 5, dest: "B"}
+]
+destinations = {A: limit=2, B: limit=2}
+numWorkers = 4
+Good schedule:
+  Worker1: Job1 (dest A)
+  Worker2: Job3 (dest B)
+  Worker3: Job2 (dest A)  // A at limit (2)
+  Worker4: Job5 (dest B)  // B at limit (2)
+  Then: Job4 waits until A has capacity
+What to Look For:
+
+Semaphore per destination for rate limiting
+
+Fair scheduling algorithm (round-robin across destinations)
+
+Avoiding convoys (distribute same-destination jobs)
+
+ExecutorService with custom queue
+
+CompletableFuture for async execution
+
+Backpressure mechanism
+
+Metrics: per-destination utilization
+
+Q1.4: Implement LFU Cache
+Category: Hash Map + Frequency Tracking
+
+Real-World Context (Hevo Platform):
+Hevo caches source schemas and transformation mappings to avoid expensive database queries. With thousands of pipelines, a naive LRU cache evicts frequently-used schemas during bursts, causing performance degradation. An LFU cache ensures hot schemas (used by hundreds of pipelines) stay cached while one-off pipeline schemas are evicted first. This is critical for maintaining sub-100ms transformation latencies at scale.
+
+Problem Statement:
+Design a Least Frequently Used (LFU) cache. When capacity is full, remove the least frequently used item. If there's a tie, remove the least recently used among them.
+
+Requirements:
+Implement LFUCache:
+
+LFUCache(int capacity)
+
+int get(int key) - Return value and increase frequency
+
+void put(int key, int value) - Add/update, evict LFU if full
+
+Example:
+
+
+
+LFUCache cache = new LFUCache(2);
+cache.put(1, 1);   // cache={1=1}, frequencies={1:1}
+cache.put(2, 2);   // cache={1=1, 2=2}, frequencies={1:2, 2:1}
+cache.get(1);      // returns 1, frequencies={1:2, 2:1}
+cache.put(3, 3);   // evicts key 2, cache={1=1, 3=3}
+cache.get(2);      // returns -1 (not found)
+What to Look For:
+
+Three HashMaps: key→value, key→frequency, frequency→keys
+
+LinkedHashSet for LRU ordering within same frequency
+
+O(1) for both get and put
+
+Tracking minFrequency
+
+Proper frequency updates
+
+Edge case: capacity=0
+
+Q1.5: Design Rate Limiter
+Category: Distributed Systems + Algorithms
+
+Real-World Context (Hevo Platform):
+Hevo integrates with API sources (Salesforce, HubSpot, Zendesk) that enforce strict rate limits (e.g., 100 requests/minute). If a customer has multiple pipelines consuming the same API, Hevo must coordinate rate limiting across distributed workers to stay within quotas. Exceeding rate limits causes API bans, pipeline failures, and customer escalations. A distributed rate limiter with Redis backend ensures compliance across all workers while maximizing throughput.
+
+Problem Statement:
+Design a rate limiter that allows maximum N requests per time window (e.g., 100 requests per minute). Support multiple rate limiting strategies.
+
+Requirements:
+Implement rate limiter with these strategies:
+
+Fixed Window: 100 requests per minute (resets every minute)
+
+Sliding Window Log: Track timestamp of each request
+
+Sliding Window Counter: Weighted count from current and previous window
+
+Token Bucket: Refill tokens at constant rate
+
+Example:
+
+
+
+RateLimiter limiter = new RateLimiter(100, 60); // 100 req/60sec
+limiter.allowRequest("user123") → true (count: 1/100)
+... (99 more requests)
+limiter.allowRequest("user123") → true (count: 100/100)
+limiter.allowRequest("user123") → false (limit exceeded)
+// After 60 seconds
+limiter.allowRequest("user123") → true (window reset)
+What to Look For:
+
+Comparison of algorithms (tradeoffs)
+
+Fixed window: simple but traffic spike at boundary
+
+Sliding log: accurate but memory-intensive
+
+Sliding counter: good balance
+
+Token bucket: smooth traffic
+
+Redis implementation for distributed systems
+
+Atomic operations for thread-safety
+
+Q1.6: Serialize and Deserialize Binary Tree
+Category: Tree Traversal + Encoding
+
+Real-World Context (Hevo Platform):
+Hevo stores nested JSON schemas (from MongoDB, REST APIs) as tree structures for transformation engine optimization. These schemas must be serialized to Redis for caching and deserialized for runtime transformation execution. Efficient serialization reduces memory footprint and cache eviction rates, directly impacting transformation latency. A compact, traversal-based encoding is essential for storing thousands of schemas in memory.
+
+Problem Statement:
+Design an algorithm to serialize a binary tree to a string and deserialize it back.
+
+Requirements:
+
+
+
+class TreeNode {
+    int val;
+    TreeNode left, right;
+}
+String serialize(TreeNode root);
+TreeNode deserialize(String data);
+Example:
+
+
+
+Tree:      1
+          / \
+         2   3
+            / \
+           4   5
+serialize(root) → "1,2,null,null,3,4,null,null,5,null,null"
+deserialize("1,2,null,null,3,4,null,null,5,null,null") → reconstructs tree
+What to Look For:
+
+Preorder/level-order traversal for serialization
+
+Handling null nodes
+
+Delimiter choice
+
+Queue/recursion for deserialization
+
+Edge cases: null tree, single node, skewed tree
+
+Space optimization
+
+ROUND 2: Framework/API-Focused Questions
+Q2.1: Implement Change Data Capture (CDC) Client
+Category: Design Patterns + Event Handling
+
+Problem Statement:
+Design a publish-subscribe system where publishers can emit events and subscribers can listen to specific event types. Multiple subscribers can listen to the same event, and events should be delivered to all interested subscribers.
+
+Requirements:
+
+
+
+interface Event {
+    String getType();      // e.g., "UserCreated", "OrderPlaced"
+    String getData();      // event payload
+}
+class PubSubSystem {
+    // Subscribe to events of a specific type
+    void subscribe(String eventType, EventListener listener)
+    // Unsubscribe from events
+    void unsubscribe(String eventType, EventListener listener)
+    // Publish an event to all subscribers
+    void publish(Event event)
+    // Get count of subscribers for an event type
+    int getSubscriberCount(String eventType)
+}
+interface EventListener {
+    void onEvent(Event event);
+}
+Example Output:
+
+
+
+system = PubSubSystem()
+EventListener logger = (event) -> System.out.println("Logged: " + event.getType());
+EventListener emailSender = (event) -> System.out.println("Email: " + event.getType());
+system.subscribe("UserCreated", logger);
+system.subscribe("UserCreated", emailSender);
+system.subscribe("OrderPlaced", logger);
+Event userEvent = new UserCreatedEvent("user-123");
+system.publish(userEvent);
+// Both logger and emailSender receive the event
+Event orderEvent = new OrderPlacedEvent("order-456");
+system.publish(orderEvent);
+// Only logger receives this event
+system.unsubscribe("UserCreated", emailSender);
+system.publish(userEvent);
+// Only logger receives the event now
+What to Look For:
+
+Proper use of HashMap/Multimap etc for subscriber management
+
+Correct event delivery to all subscribers
+
+Subscribe/unsubscribe working correctly
+
+Thread safety (discuss, not required to implement)
+
+No memory leaks (clean unsubscribe)
+
+Edge cases: unsubscribe non-existent listener, multiple subscribes of same listener
+
+Q2.2: Simple Event Processor with Offset Tracking
+Category: State Management + Sequential Processing
+
+Problem Statement:
+In data pipelines, events must be processed in order without reprocessing or data loss. Design a simple event processor that reads events, processes them sequentially, and tracks offsets for recovery.
+
+Requirements:
+
+
+
+class Event {
+    long offset;           // monotonically increasing
+    String payload;
+}
+interface EventHandler {
+    void handle(Event event) throws Exception;
+}
+interface OffsetStore {
+    void saveOffset(long offset);
+    long loadOffset();
+}
+class SimpleEventProcessor {
+    SimpleEventProcessor(List<Event> eventSource, EventHandler handler, OffsetStore store)
+    void start();          // begin processing
+    void stop();           // graceful shutdown
+    long getLastOffset();  // last successfully processed offset
+}
+Example:
+
+
+
+Events: [offset=0, offset=1, offset=2, offset=3, offset=4]
+Processing flow:
+  offset=0 → handle (success) → save offset 0
+  offset=1 → handle (success) → save offset 1
+  offset=2 → handle (throws exception, skip or retry)
+  offset=3 → handle (success) → save offset 3
+  offset=4 → handle (success) → save offset 4
+Crash & Recovery:
+  Processor crashes while processing offset 2
+  On restart: load last offset = 1
+  Resume from offset 2 (no reprocessing)
+  No data loss or duplicates
+What to Look For:
+
+Sequential processing (one event at a time)
+
+Offset tracking: save after successful processing
+
+Recovery from checkpoint without duplicates
+
+Exception handling from handler
+
+Graceful shutdown
+
+Idempotency awareness
+
+Follow-up Questions:
+
+How would you handle partial batch failures? (e.g., handle(offset=2) succeeds, handle(offset=3) throws)
+
+What's the difference between "at-least-once" and "exactly-once" semantics in this design?
+
+How would you scale this to multiple parallel processors consuming different offsets?
+
+What happens if the handler is slow? Should offsets still be committed?
+
+How would you add metrics/monitoring (offsets processed per second, failures)?
+
+Q2.3: Request Correlation ID Tracking
+Category: Threading + Context Management
+
+Problem Statement:
+For debugging and tracing, each request needs a unique ID that follows it through synchronous and asynchronous operations. When spawning async tasks, propagate the correlation ID to child threads without external libraries.
+
+Requirements:
+
+
+
+class RequestContext {
+    String correlationId;    // unique per request
+    String userId;           // who made the request
+    long startTimeMs;
+    // Factory and utilities
+    static RequestContext create(String userId);
+    RequestContext copy();
+}
+class ContextManager {
+    // Store/retrieve context for current thread
+    void setContext(RequestContext ctx);
+    RequestContext getContext();
+    // Execute task while propagating context to new thread
+    void executeAsync(Runnable task);
+}
+Scenario:
+
+
+
+Thread A (HTTP handler):
+  ctx = RequestContext.create("user-123")
+  setContext(ctx)
+  Synchronous work:
+    log("Starting request", ctx.correlationId) → logs "req-abc123"
+    db.query()
+    log("Query done", ctx.correlationId) → logs "req-abc123"
+  Asynchronous work:
+    executeAsync(() -> {
+      // ctx.correlationId should still be "req-abc123" in Thread B
+      enrichment.call()
+      log("Enrichment done", ctx.correlationId) → logs "req-abc123"
+    })
+Evaluation Criteria:
+
+ThreadLocal for context storage per thread
+
+Context available via getContext() in same thread
+
+Context propagation to new threads via executeAsync()
+
+Context copy/inheritance semantics
+
+Proper cleanup to avoid context leaks
+
+Edge cases: nested async calls, context not set
+
+Follow-up Questions:
+
+What happens if context is set but not cleared? (memory leak scenario)
+
+How would you handle nested executeAsync calls?
+
+What if executeAsync never completes? How do you prevent context leaks?
+
+How would you serialize the context to send over HTTP to another service?
+
+What if the same request is handled by multiple threads simultaneously?
+
+Q2.4: Simple Circuit Breaker Pattern
+Category: Resilience + State Management
+
+Problem Statement:
+When calling external services, failures can cascade. Implement a circuit breaker that tracks failures and fails fast when a service is down, preventing wasted calls and timeouts.
+
+State Machine:
+
+
+
+CLOSED → normal operation, call succeeds
+         track failures
+         after N failures → OPEN
+OPEN → service down
+       all calls fail immediately (fail-fast)
+       after cooldownMs → HALF_OPEN
+HALF_OPEN → testing recovery
+            next call is attempted
+            if succeeds → CLOSED
+            if fails → OPEN again
+Scenario:
+Your service calls three external APIs:
+
+Payment API (critical)
+
+Notification API (non-critical)
+
+Analytics API (non-critical)
+
+If Analytics API is slow/down, it shouldn't exhaust the thread pool and affect Payment API calls.
+
+Requirements:
+
+
+
+enum CircuitState { CLOSED, OPEN, HALF_OPEN }
+class CircuitBreaker {
+    CircuitBreaker(int failureThreshold, long cooldownMs)
+    <T> T execute(Callable<T> operation) throws CircuitOpenException;
+    CircuitState getState();
+    void reset();
+}
+What to Look For:
+
+Failure counting and threshold
+
+State transitions (CLOSED → OPEN → HALF_OPEN → CLOSED)
+
+Fail-fast when OPEN (no unnecessary calls)
+
+Cooldown timing
+
+Atomic state management
+
+Follow-up Questions:
+
+How would you track failure metrics (which calls fail, success rate)?
+
+Should the circuit breaker be per-service or global across all services?
+
+What if a HALF_OPEN probe succeeds but the next call fails immediately?
+
+How would you implement a exponential backoff in HALF_OPEN state?
+
+Can you explain why HALF_OPEN state is necessary (why not just CLOSED/OPEN)?
+
+How would you integrate this with logging and monitoring?
+
+Q2.5: Token Bucket Rate Limiter
+Category: Algorithms + Time Management
+
+Problem Statement:
+Implement a token bucket rate limiter that allows a maximum number of requests per time period. Tokens are added at a constant rate, and each request consumes one token. This is useful for controlling request rates to external APIs.
+
+Requirements:
+
+
+
+class TokenBucketRateLimiter {
+    // tokensPerSecond: refill rate
+    // capacity: max tokens in bucket
+    TokenBucketRateLimiter(double tokensPerSecond, int capacity)
+    // Try to consume one token
+    // Return true if token available, false if rate limit exceeded
+    boolean allowRequest()
+    // Get current available tokens (for monitoring)
+    int getAvailableTokens()
+}
+Scenario:
+
+
+
+limiter = TokenBucketRateLimiter(10, 10)  // 10 req/sec, max 10 tokens
+t=0ms:    allowRequest() → true (9 tokens left)
+t=50ms:   allowRequest() → true (8 tokens left)
+...
+t=900ms:  allowRequest() → true (0 tokens left)
+t=950ms:  allowRequest() → false (rate limited, no tokens)
+t=1100ms: allowRequest() → true (tokens refilled: 10 * 0.1 = 1)
+What to Look For:
+
+Correct token refill calculation: tokens + (elapsedMs * rate / 1000.0)
+
+Lazy evaluation (don't use background thread for refill)
+
+Cap refilled tokens at capacity
+
+Handle fractional tokens correctly
+
+Thread safety (discuss at least)
+
+Edge cases: capacity=0, rate=0, rapid repeated calls
+
+Follow-up Questions:
+
+How would you handle multiple clients with per-client rate limits (e.g., customer-A: 100 req/s, customer-B: 50 req/s)?
+
+What's the difference between token bucket and leaky bucket algorithms?
+
+How would you implement a "burst allowance"? (e.g., allow bursts up to 50 req/s but average 10 req/s)
+
+How would you integrate this with the Circuit Breaker from Q2.3?
+
+What happens if tokensPerSecond is very small (e.g., 0.001)? How do you handle fractional tokens?
+
+Q2.6: Retry Mechanism with Exponential Backoff
+Category: Resilience + Time Management
+
+Problem Statement:
+Design a retry mechanism that automatically retries failed operations with exponential backoff and jitter. This is useful for handling transient failures in distributed systems.
+
+Requirements:
+
+
+
+class RetryPolicy {
+    // maxRetries: max number of retry attempts
+    // initialDelayMs: first retry delay
+    // maxDelayMs: cap on retry delay
+    RetryPolicy(int maxRetries, long initialDelayMs, long maxDelayMs)
+    <T> T execute(Callable<T> operation) throws Exception;
+}
+Scenario:
+
+
+
+policy = RetryPolicy(3, 100, 5000)
+operation fails → retry after 100ms
+operation fails → retry after 200ms
+operation fails → retry after 400ms
+operation fails → throw exception (max retries exceeded)
+operation succeeds on retry 2 → return result immediately
+What to Look For:
+
+Correct exponential backoff: delay = initialDelay * 2^(attempt - 1)
+
+Capped at maxDelayMs
+
+Jitter to prevent thundering herd
+
+Configurable max retries
+
+Distinguishing retryable vs non-retryable exceptions
+
+Thread.sleep() for delays (or ScheduledExecutor for async)
+
+Follow-up Questions:
+
+How would you implement async retries with CompletableFuture instead of blocking sleep?
+
+What's the difference between retrying all exceptions vs only specific ones?
+
+How would you combine RetryPolicy with CircuitBreaker (Q2.3)?
+
+What if the operation takes a long time and exceeds the retry window?
+
+How would you add metrics (retry count, success rate)?
+
+ROUND 3: SYSTEM DESIGN (LOW-LEVEL DESIGN)
+LLD 3.1: Design a Single Data Pipeline with Retry and Recovery
+Category: Component Design + Error Handling
+
+Real-World Context (Hevo Platform):
+A Hevo pipeline reads from a PostgreSQL source, transforms data (flattening JSON, type casting), and writes to Snowflake. Network blips, destination throttling, and transient errors are common in production. The pipeline must retry failures with exponential backoff, checkpoint progress to resume after crashes, and handle partial batch failures (e.g., 990 records succeed, 10 fail due to schema mismatch). This design is the core building block of Hevo's 150+ source-destination connectors.
+
+Problem Statement:
+Design a data pipeline processor that reads from a source, applies transformations, and writes to a destination. The pipeline must handle failures gracefully with retry logic, maintain checkpoints for recovery, and support exactly-once processing semantics.
+
+Requirements:
+
+Components to Design:
+
+SourceReader: Reads data from source (database, file, queue)
+
+TransformationEngine: Applies data transformations
+
+DestinationWriter: Writes processed data to destination
+
+CheckpointManager: Manages offset/position tracking
+
+RetryHandler: Handles failures with exponential backoff
+
+Challenges:
+
+Source read failures (connection issues, timeouts)
+
+Transformation errors (invalid data, business logic failures)
+
+Destination write failures (downstream service unavailable)
+
+Partial batch failures (some records succeed, some fail)
+
+Recovery after process crash (resume from last checkpoint)
+
+Example Scenario:
+
+
+
+Pipeline Processing:
+Source: Database table (read 1000 records at a time)
+Transform: Parse JSON, validate fields, enrich data
+Destination: REST API
+Normal flow:
+→ Read batch (offset 1000-2000)
+→ Transform 1000 records
+→ Write to API
+→ Checkpoint offset 2000
+→ Continue from offset 2000
+Failure scenario:
+→ Read batch (offset 2000-3000)
+→ Transform 1000 records
+→ Write to API fails (503 Service Unavailable)
+→ Retry with exponential backoff (1s, 2s, 4s, 8s)
+→ After 5 retries, still failing
+→ Store failed batch in error queue
+→ Checkpoint offset 3000 (skip failed batch for now)
+→ Continue processing
+Recovery scenario:
+→ Process crashes at offset 5000
+→ On restart, read checkpoint (offset 5000)
+→ Resume from offset 5000 (no duplicate processing)
+What to Look For:
+
+Design Patterns:
+
+Reader-Transformer-Writer pattern
+
+Retry with exponential backoff
+
+Checkpoint pattern for state persistence
+
+Circuit breaker for downstream failures
+
+Error queue for failed records
+
+Key Decisions:
+
+Batch size (performance vs memory tradeoff)
+
+Checkpoint frequency (after every batch vs every N batches)
+
+Retry strategy (exponential backoff parameters, max retries)
+
+Error handling (fail fast vs skip and continue vs DLQ)
+
+At-least-once vs exactly-once semantics
+
+State Management:
+
+Where to store checkpoints (file, database, Redis)
+
+Checkpoint format (offset, timestamp, record ID)
+
+State recovery on restart
+
+Idempotency handling (avoid duplicate writes)
+
+Performance Optimization:
+
+Parallel processing (multiple threads/workers)
+
+Batching for throughput
+
+Connection pooling
+
+Async I/O where possible
+
+Monitoring:
+
+Records processed per second
+
+Error rate and error types
+
+Retry attempts and success rate
+
+Lag (current offset vs source's latest offset)
+
+Checkpoint age (time since last checkpoint)
+
+LLD 3.2: Design a Batch Job Processing System
+Category: Job Scheduling + Parallel Execution
+
+Real-World Context (Hevo Platform):
+Hevo runs scheduled batch jobs for full table syncs (daily snapshot of entire database), aggregation pipelines (compute daily rollups), and maintenance tasks (schema refresh, audit log archival). Jobs have dependencies—schema refresh must complete before data sync; transformations depend on extraction completing. The system must schedule jobs respecting dependencies (DAG execution), handle failures with retries, and provide visibility into job history for customer support and SLA compliance.
+
+Problem Statement:
+Design a batch job processing system that executes jobs on a schedule (cron-like), supports parallel execution, handles job dependencies (DAG), and provides failure handling with retry capabilities. Jobs should be tracked for progress and provide visibility into execution history.
+
+Requirements:
+
+Components to Design:
+
+JobScheduler: Triggers jobs based on schedule (cron expressions)
+
+DependencyResolver: Manages job dependencies (DAG)
+
+ExecutionEngine: Runs jobs in parallel (thread pool)
+
+RetryManager: Handles failed jobs with retry policy
+
+StatusTracker: Tracks job status and execution history
+
+Job Types:
+
+Scheduled jobs: Run on cron schedule (daily, hourly, custom)
+
+Dependent jobs: Run after prerequisite jobs complete
+
+Manual jobs: Triggered on-demand
+
+Recurring jobs: Run repeatedly with interval
+
+Example Scenario:
+
+
+
+Daily ETL Job Dependencies:
+Job A: Extract from Database (runs at 2:00 AM)
+Job B: Transform data (depends on Job A)
+Job C: Validate data (depends on Job B)
+Job D: Load to warehouse (depends on Job C)
+Job E: Generate reports (depends on Job D)
+Execution flow:
+2:00 AM: Job A starts
+2:15 AM: Job A completes → Job B starts
+2:30 AM: Job B completes → Job C starts
+2:31 AM: Job C fails (validation error)
+→ Retry Job C (attempt 2)
+2:32 AM: Job C succeeds → Job D starts
+2:45 AM: Job D completes → Job E starts
+3:00 AM: Job E completes → All jobs done
+Status tracking:
+Job A: SUCCESS (15 min)
+Job B: SUCCESS (15 min)
+Job C: SUCCESS after retry (2 min, 1 retry)
+Job D: SUCCESS (15 min)
+Job E: SUCCESS (15 min)
+Total: 62 min (including retry)
+What to Look For:
+
+Design Patterns:
+
+Scheduler pattern (cron expression parsing)
+
+DAG-based dependency resolution
+
+Thread pool executor for parallelism
+
+Retry with exponential backoff
+
+State machine for job lifecycle
+
+Scheduling:
+
+Cron expression parsing and evaluation
+
+Timezone handling
+
+Skipped execution handling (catch-up vs skip)
+
+Max concurrent jobs limit
+
+Priority-based scheduling
+
+Dependency Management:
+
+DAG construction and validation (detect cycles)
+
+Topological sort for execution order
+
+Handling failed dependencies (abort downstream vs skip)
+
+Parallel execution of independent jobs
+
+Dynamic dependency resolution
+
+Failure Handling:
+
+Retry policy (max retries, backoff strategy)
+
+Failure notification (email, webhook, Slack)
+
+Error classification (retryable vs non-retryable)
+
+Partial failure handling (some jobs succeed, some fail)
+
+Dead letter queue for permanently failed jobs
+
+State Tracking:
+
+Job status (PENDING, RUNNING, SUCCESS, FAILED, RETRYING)
+
+Execution history (start time, end time, duration)
+
+Error logs and stack traces
+
+Retry attempts tracking
+
+Progress percentage (for long-running jobs)
+
+Performance Optimization:
+
+Thread pool sizing (CPU-bound vs I/O-bound jobs)
+
+Job priority and queue management
+
+Throttling (rate limiting for resource-intensive jobs)
+
+Batch job execution (group similar jobs)
+
+Monitoring:
+
+Jobs pending vs running vs completed
+
+Average execution time per job
+
+Success rate and failure rate
+
+Retry count distribution
+
+SLA tracking (jobs completing on time)
+
+LLD 3.3: Design a Multi-Source Data Deduplication Engine
+Category: Distributed Algorithms + State Management
+
+Real-World Context (Hevo Platform):
+Hevo customers often have duplicate data across sources (same user in Salesforce, HubSpot, and Zendesk). The deduplication engine identifies duplicates using composite keys (email + phone) or fuzzy matching (handle typos), merges records, and writes a single consolidated record to the destination. With millions of records per day across distributed workers, the dedup store must be partitioned (by hash key), support TTL-based eviction, and handle race conditions when multiple workers process the same user simultaneously.
+
+Problem Statement:
+Design a deduplication engine that works across multiple data sources, handling different identifier types (composite keys, fuzzy matching) and supporting high-throughput processing.
+
+Requirements:
+
+Components to Design:
+
+IdentifierExtractor: Extracts unique identifiers from records
+
+DeduplicationStore: Maintains seen identifiers (distributed)
+
+MatchingEngine: Implements different matching strategies
+
+PartitionManager: Distributes dedup work across nodes
+
+GarbageCollector: Cleans up old dedup state
+
+Deduplication Strategies:
+
+Exact match: Same ID across sources
+
+Composite key: Combination of fields (email + name)
+
+Fuzzy match: Similarity score (Levenshtein distance, phonetic matching)
+
+Time-based: Duplicates within time window
+
+Content-based: Hash of record content
+
+Example Scenario:
+
+
+
+Deduplicating user records from 3 CRM systems:
+Source A: {id: "123", email: "john@example.com", name: "John Smith"}
+Source B: {id: "456", email: "john@example.com", name: "Jon Smith"}  // fuzzy
+Source C: {id: "789", email: "john@example.com", name: "John Smith"} // exact
+Matching results:
+→ A and C: Exact match (same email + name)
+→ A and B: Fuzzy match (same email, name similarity 95%)
+→ Output: 1 consolidated record (merge A, B, C)
+What to Look For:
+
+Scalability:
+
+Partitioning strategy (consistent hashing on identifier)
+
+Bloom filter for fast existence check (before expensive lookup)
+
+Multi-level dedup (local cache → distributed cache → database)
+
+Batch processing for throughput
+
+State Management:
+
+TTL-based eviction (remove old identifiers after N days)
+
+Persistent vs in-memory storage tradeoff
+
+State size estimation (1B records × 36 bytes per ID = 36GB)
+
+Compression strategies (integer encoding for IDs)
+
+Matching Algorithms:
+
+Exact match: O(1) hash lookup
+
+Fuzzy match: O(n) or use approximate matching (LSH - Locality Sensitive Hashing)
+
+Performance vs accuracy tradeoff
+
+False positive/negative rates
+
+Conflict Resolution:
+
+Multiple matches found (which record to keep?)
+
+Merge strategy (take latest, prioritize source, manual review)
+
+Audit trail (track dedup decisions)
+
+Distributed Coordination:
+
+Handling dedup across multiple nodes
+
+Avoiding race conditions (two nodes dedup same record)
+
+Eventual consistency vs strong consistency
+
+Split-brain scenarios
+
+LLD 3.4: Design a Schema Registry with Versioning
+Category: Schema Management + Compatibility
+
+Real-World Context (Hevo Platform):
+Hevo ingests data from evolving sources—customers add columns to their databases, change data types, or restructure JSON payloads. The schema registry tracks schema versions, validates compatibility (backward/forward/full), and generates migration scripts for destination tables. Without compatibility checks, breaking schema changes cause pipeline failures. The registry must cache schemas for performance (thousands of lookups per second), replicate across regions for HA, and support rollback when schema changes cause data corruption.
+
+Problem Statement:
+Design a centralized schema registry that manages schema versions, enforces compatibility rules, and supports schema evolution across distributed services.
+
+Requirements:
+
+Components to Design:
+
+SchemaStore: Persists schema versions
+
+CompatibilityChecker: Validates schema changes
+
+SchemaResolver: Resolves schema by ID or version
+
+MigrationEngine: Generates migration scripts
+
+CacheLayer: High-performance schema lookup
+
+Compatibility Modes:
+
+BACKWARD: New schema can read old data (add optional fields, remove fields)
+
+FORWARD: Old schema can read new data (only add required fields)
+
+FULL: Both backward and forward compatible
+
+NONE: No compatibility check (breaking changes allowed)
+
+Example Scenario:
+
+
+
+User schema evolution:
+V1: {id: int, name: string}
+V2: {id: int, name: string, email: string}  // add optional field
+→ BACKWARD compatible (can read V1 data with V2 schema)
+V3: {id: int, name: string, email: string (required)}  // make email required
+→ NOT BACKWARD compatible (can't read V1 data with V3 schema)
+→ Registry rejects V3 if BACKWARD mode enforced
+What to Look For:
+
+Design Patterns:
+
+Repository pattern for schema storage
+
+Visitor pattern for schema traversal/validation
+
+Builder pattern for schema creation
+
+Adapter pattern for different schema formats (Avro, Protobuf, JSON Schema)
+
+Versioning Strategy:
+
+Auto-incrementing version numbers (1, 2, 3...)
+
+Git-like versioning with branches
+
+Immutable schemas (versions never change)
+
+Schema deletion policy (soft delete vs hard delete)
+
+Compatibility Checking:
+
+Field addition: allowed (with default value)
+
+Field removal: depends on mode (allowed in BACKWARD)
+
+Type change: usually breaking (int → string)
+
+Renaming: breaking (need migration mapping)
+
+Algorithm complexity: O(n) where n = number of fields
+
+Caching Strategy:
+
+Cache schemas by ID and version
+
+TTL-based invalidation
+
+Cache warming on startup
+
+Distributed cache consistency (invalidate across all nodes)
+
+Migration Support:
+
+Automatic migration script generation
+
+Dry-run mode (test migration without applying)
+
+Rollback support (revert to previous schema version)
+
+Data backfill strategy for new required fields
+
+High Availability:
+
+Multi-region replication
+
+Read replicas for scale
+
+Write consistency (single master vs multi-master)
+
+Conflict resolution for concurrent schema updates
+
+LLD 3.5: Design a Data Transformation Pipeline
+Category: Data Processing + Configuration-Based Design
+
+Real-World Context (Hevo Platform):
+Hevo allows customers to configure transformations via UI: filter rows (age > 18), rename columns, enrich with external APIs (IP to geo-location), and validate data quality. These transformations are stored as JSON configs and executed at runtime. The transformation pipeline must chain operations efficiently, handle per-record errors (skip invalid records), batch API calls for enrichment (avoid 1 API call per record), and provide granular error reporting (which transformation stage failed, which records). This is Hevo's core value-add over raw data replication.
+
+Problem Statement:
+Design a data transformation pipeline that applies a chain of configurable transformations to input data. The pipeline should support common transformation operations, handle errors gracefully, and optimize for performance through batching and parallel processing.
+
+Requirements:
+
+Components to Design:
+
+TransformationChain: Manages sequence of transformations
+
+TransformationRegistry: Registers available transformation types
+
+DataValidator: Validates input/output at each stage
+
+ErrorHandler: Handles transformation failures
+
+PerformanceOptimizer: Batching and parallel execution
+
+Transformation Types:
+
+Filter: Remove records based on condition (e.g., age > 18)
+
+Map: Transform fields (rename, compute new fields)
+
+Validate: Check data quality (required fields, format, ranges)
+
+Enrich: Add data from external source (lookup table, API)
+
+Aggregate: Group and compute aggregations (sum, count, avg)
+
+Example Scenario:
+
+
+
+Input: User records from CSV
+[
+  {id: 1, name: "John", age: 25, country_code: "US"},
+  {id: 2, name: "Jane", age: 17, country_code: "UK"},
+  {id: 3, name: "Bob", age: 30, country_code: "CA"}
+]
+Transformation Pipeline:
+1. Filter: age >= 18
+   → Removes Jane (age 17)
+2. Map: Rename and compute fields
+   - country_code → country
+   - Add field: age_group = (age < 30 ? "young" : "senior")
+3. Enrich: Lookup country name
+   - US → United States
+   - CA → Canada
+4. Validate: Check required fields
+   - Ensure id, name, age, country, age_group are present
+Output:
+[
+  {id: 1, name: "John", age: 25, country: "United States", age_group: "young"},
+  {id: 3, name: "Bob", age: 30, country: "Canada", age_group: "senior"}
+]
+What to Look For:
+
+Design Patterns:
+
+Chain of Responsibility (transformation chain)
+
+Strategy pattern (different transformation types)
+
+Builder pattern (pipeline configuration)
+
+Template method (common transformation logic)
+
+Configuration:
+
+JSON/YAML-based transformation config
+
+Validation of configuration
+
+Dynamic pipeline creation from config
+
+Reusable transformation templates
+
+Error Handling:
+
+Per-record error handling (skip vs fail)
+
+Per-stage error handling (continue vs abort)
+
+Error logging and reporting
+
+Dead letter queue for failed records
+
+Partial failure handling (some records succeed)
+
+Performance Optimization:
+
+Batching records (process 1000 at a time)
+
+Parallel processing (multiple threads)
+
+Caching for enrichment lookups
+
+Lazy evaluation where possible
+
+Avoiding redundant transformations
+
+Validation:
+
+Input validation (before pipeline)
+
+Output validation (after each stage)
+
+Schema validation (field types, required fields)
+
+Business rule validation (value ranges, constraints)
+
+Monitoring:
+
+Records processed per stage
+
+Transformation success/failure rate
+
+Processing time per stage
+
+Bottleneck identification
+
+Error distribution by type
+
+Extensibility:
+
+Adding custom transformation types
+
+Pluggable validators
+
+Custom enrichment sources
+
+Transformation composition (combine multiple)
+
+Evaluation Criteria for SDE 3
+Technical Depth
+Advanced algorithms: Demonstrates knowledge of complex data structures, concurrency patterns, and distributed algorithms
+
+Production-readiness: Considers error handling, monitoring, graceful degradation, fault tolerance
+
+Component-level design: Can design complex components and services (not entire distributed platforms)
+
+Framework mastery: Deep knowledge of enterprise frameworks and libraries with ability to extend them
+
+Best practices: Strong understanding of SOLID principles, design patterns, and clean code
+
+Problem-Solving Approach
+Quickly identifies optimal solutions for component-level problems
+
+Proactively discusses tradeoffs and alternatives
+
+Considers multiple approaches before implementation
+
+Thinks about edge cases, failure scenarios, and production concerns
+
+Balances correctness, performance, and maintainability
+
+Code Quality
+Clean, maintainable, production-ready code
+
+Proper abstraction and separation of concerns
+
+Defensive programming (null checks, validation, error handling)
+
+Appropriate use of design patterns (not over-engineering)
+
+Thread-safe implementations when needed
+
+Well-documented and testable code
+
+Operational Excellence
+Monitoring and observability considerations (metrics, logs, traces)
+
+Debugging strategies for production issues
+
+Deployment strategies (gradual rollout, feature flags)
+
+Performance optimization techniques
+
+Documentation for maintainability
+
+Runbook considerations for operational support
+
+Communication
+Clear explanation of approach and reasoning
+
+Articulates tradeoffs and design decisions effectively
+
+Responds well to feedback and hints
+
+Asks clarifying questions when needed
+
+Demonstrates collaborative problem-solving
+
+Shows ability to mentor junior engineers
+
+Can explain complex technical concepts clearly
+
+Experience Indicators
+Has built and maintained production systems
+
+Understands production challenges from experience
+
+Can estimate complexity and effort reasonably
+
+Knows when to use simple vs complex solutions
+
+Balances technical excellence with pragmatism
+
+Strong individual contributor, not expected to design entire platforms
+
+Follow-up Questions for SDE 3
+Production and Failure Scenarios
+How does this behave under failure scenarios (network partition, node crash)?
+
+Assess understanding of distributed system failures
+
+Look for consideration of partial failures, timeouts, retries
+
+How would you debug this in production when things go wrong?
+
+Evaluate debugging methodology
+
+Look for logging, metrics, tracing considerations
+
+What happens under high contention? How does it degrade?
+
+Test understanding of performance under load
+
+Look for graceful degradation strategies
+
+Scalability and Performance
+How does this scale horizontally? What's the scaling bottleneck?
+
+Assess ability to identify scaling limits
+
+Look for sharding, partitioning, load balancing considerations
+
+What are the bottlenecks in your design? How would you optimize?
+
+Test performance optimization skills
+
+Look for specific optimization techniques
+
+System Design and Architecture
+How would you handle schema evolution in this system?
+
+Evaluate understanding of backward compatibility
+
+Look for versioning strategies
+
+What's your testing strategy? Unit tests alone aren't enough here.
+
+Assess comprehensive testing approach
+
+Look for integration tests, chaos testing, load testing
+
+What metrics would you expose for operations teams?
+
+Test observability thinking
+
+Look for meaningful metrics (latency, throughput, error rates)
+
+Deployment and Operations
+How would you ensure zero downtime during deployments?
+
+Evaluate deployment strategy knowledge
+
+Look for blue-green, canary, rolling deployment considerations
+
+How would you monitor this system's health in production?
+
+Assess monitoring and alerting approach
+
+Look for SLIs, SLOs, error budgets
+
+Scoring Rubric
+For Each Question:
+1 - Poor:
+
+Cannot solve or makes no meaningful progress
+
+Fundamental misunderstanding of problem
+
+Unable to code even with heavy hints
+
+No consideration of production concerns
+
+2 - Below Average:
+
+Partial solution with significant bugs
+
+Poor complexity or suboptimal approach
+
+Missing major edge cases and error handling
+
+Needs substantial guidance
+
+Little consideration of scalability or failures
+
+3 - Average:
+
+Working solution for basic cases
+
+Reasonable complexity but not optimal
+
+Some edge cases and error handling
+
+Decent code quality
+
+Basic awareness of production concerns
+
+4 - Above Average:
+
+Optimal solution with good complexity
+
+Most edge cases and error handling covered
+
+Clean, readable, maintainable code
+
+Good explanations and reasoning
+
+Considers monitoring and failures
+
+Overall Assessment Guidelines:
+Strong Hire :
+
+Consistently optimal solutions
+
+Deep technical knowledge
+
+Production mindset throughout
+
+Excellent communication
+
+Senior-level thinking demonstrated
+
+Hire :
+
+Good solutions with minor gaps
+
+Solid technical foundation
+
+Awareness of production concerns
+
+Good communication
+
+Can grow into senior role
+
+Borderline :
+
+Working solutions but not optimal
+
+Some gaps in knowledge or approach
+
+Limited production thinking
+
+Needs more growth before senior role
+
+No Hire :
+
+Significant gaps in problem-solving
+
+Lacks required technical depth
+
+Little consideration of production concerns
+
+Not ready for senior engineer role
+
+Time Recommendations
+Per Question: 60-75 minutes
+
+5 min: Introduction and problem clarification
+
+Remaining: Coding/Design with iterative refinement
+
+10 min: Follow-ups, tradeoff discussions, and production considerations
+
+5 min: Candidate questions
+
+Interview Structure:
+
+Start with problem statement and clarification
+
+Allow candidate to drive the solution approach
+
+Provide hints if stuck, but note level of guidance needed
+
+Deep dive into production concerns and failure scenarios
+
+Discuss alternatives and tradeoffs
+
+Assess ability to extend solution for additional requirements
+
+Key Differences from SDE 2
+SDE 3  vs SDE 2 :
+
+SDE 3 candidates are expected to demonstrate:
+
+Advanced Technical Skills: Beyond correct solutions, show mastery of complex algorithms, concurrency patterns, and advanced data structures
+
+Production Mindset: Automatically consider failures, monitoring, graceful degradation, and scalability without prompting
+
+Component-level Design: Can design complex components with proper abstraction, not just implement features
+
+Framework Depth: Deep knowledge of enterprise frameworks with ability to extend and customize them
+
+Operational Excellence: Consider debugging, deployment, rollback, and operational support from the start
+
+Leadership & Mentoring: Clear communication, ability to mentor juniors, drive technical discussions, and set standards
+
+Experience-Based Wisdom: Know when to use simple vs complex solutions, pragmatic tradeoff decisions
+
+What SDE 3 is NOT:
+NOT expected to design entire distributed platforms (that's Staff/Principal level)
+
+NOT expected to define architecture for the whole organization
+
+NOT expected to have deep expertise in all technologies (focus on depth in core areas)
