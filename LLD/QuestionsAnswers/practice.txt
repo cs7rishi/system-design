@@ -836,7 +836,7 @@ Lag (current offset vs source's latest offset)
 
 Checkpoint age (time since last checkpoint)
 
-LLD 3.2: Design a Batch Job Processing System
+>>>>> LLD 3.2: Design a Batch Job Processing System <<<<<<
 Category: Job Scheduling + Parallel Execution
 
 Real-World Context (Hevo Platform):
@@ -979,7 +979,7 @@ Retry count distribution
 
 SLA tracking (jobs completing on time)
 
-LLD 3.3: Design a Multi-Source Data Deduplication Engine
+>>>>LLD 3.3: Design a Multi-Source Data Deduplication Engine <<<<<
 Category: Distributed Algorithms + State Management
 
 Real-World Context (Hevo Platform):
@@ -1076,7 +1076,7 @@ Eventual consistency vs strong consistency
 
 Split-brain scenarios
 
-LLD 3.4: Design a Schema Registry with Versioning
+>>>>>>>LLD 3.4: Design a Schema Registry with Versioning<<<<<<
 Category: Schema Management + Compatibility
 
 Real-World Context (Hevo Platform):
@@ -1184,7 +1184,7 @@ Write consistency (single master vs multi-master)
 
 Conflict resolution for concurrent schema updates
 
-LLD 3.5: Design a Data Transformation Pipeline
+>>>>LLD 3.5: Design a Data Transformation Pipeline<<<<
 Category: Data Processing + Configuration-Based Design
 
 Real-World Context (Hevo Platform):
@@ -1401,7 +1401,7 @@ Balances technical excellence with pragmatism
 Strong individual contributor, not expected to design entire platforms
 
 Follow-up Questions for SDE 3
-Production and Failure Scenarios
+>>>>>>>>> Production and Failure Scenarios <<<<<<<<<<<<<<<
 How does this behave under failure scenarios (network partition, node crash)?
 
 Assess understanding of distributed system failures
@@ -1420,7 +1420,7 @@ Test understanding of performance under load
 
 Look for graceful degradation strategies
 
-Scalability and Performance
+>>>>>>>>>>>>Scalability and Performance <<<<<<<<<<<
 How does this scale horizontally? What's the scaling bottleneck?
 
 Assess ability to identify scaling limits
@@ -1433,7 +1433,9 @@ Test performance optimization skills
 
 Look for specific optimization techniques
 
-System Design and Architecture
+--------------------------------------------
+
+>>>>>>>>>>>System Design and Architecture<<<<<<<<<<<
 How would you handle schema evolution in this system?
 
 Evaluate understanding of backward compatibility
@@ -1452,7 +1454,7 @@ Test observability thinking
 
 Look for meaningful metrics (latency, throughput, error rates)
 
-Deployment and Operations
+>>>>Deployment and Operations<<<<<
 How would you ensure zero downtime during deployments?
 
 Evaluate deployment strategy knowledge
@@ -1464,6 +1466,8 @@ How would you monitor this system's health in production?
 Assess monitoring and alerting approach
 
 Look for SLIs, SLOs, error budgets
+
+----------------------------------------
 
 Scoring Rubric
 For Each Question:
